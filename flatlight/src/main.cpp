@@ -137,19 +137,17 @@ int main(int argc, char** argv)
 						float level = att;
 						unsigned char cLevel = (char)(level * 255.0f);
 
-						struct col
+						struct colour
 						{
-							uint32_t r;
-							uint32_t g;
-							uint32_t b;
-							uint32_t a;
+							uint32_t r :8;
+							uint32_t g :8;
+							uint32_t b :8;
+							uint32_t a :8;
 						};
 
-						col col;
-						col.a = 0;
+						colour col;
+						memset(&col, 0, sizeof(col));
 						col.r = cLevel;
-						col.g = cLevel;
-						col.b = cLevel;
 
 						setTile(pixels, x, y, *(uint32_t*)&col);
 					}
