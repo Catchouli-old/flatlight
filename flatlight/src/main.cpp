@@ -156,6 +156,8 @@ int main(int argc, char** argv)
 			}
 		}
 
+		raycast(light_x, light_y, 15, 20);
+
 		// Render light
 		setTile(pixels, light_x, light_y, 0xFFFFFF);
 
@@ -312,6 +314,8 @@ void setTile(uint32_t* pixels, int x, int y, int colour)
 	}
 }
 
+// A fast raycast that skips to the next tile along the ray in a grid
+// An implementation of John Amanatides (1987) - A fast voxel traversal algorithm for ray tracing
 bool raycast(int startx, int starty, int endx, int endy)
 {
 	if (level[starty * level_width + startx] == '#')
@@ -319,52 +323,58 @@ bool raycast(int startx, int starty, int endx, int endy)
 		return true;
 	}
 
-	// Cast between positions starting at centre of tile
-	int start_x_real = startx * TILE_WIDTH + TILE_WIDTH * 0.5f;
-	int start_y_real = starty * TILE_HEIGHT + TILE_HEIGHT * 0.5f;
-
-	int end_x_real = endx * TILE_WIDTH + TILE_WIDTH * 0.5f;
-	int end_y_real = endy * TILE_HEIGHT + TILE_HEIGHT * 0.5f;
-
-	float diffx = end_x_real - start_x_real;
-	float diffy = end_y_real - start_y_real;
+	float diffx = endx - startx;
+	float diffy = endy - starty;
 
 	float length = sqrt(diffx * diffx + diffy * diffy);
 
 	float dx = diffx / length;
 	float dy = diffy / length;
 
+	if (abs(dx) < 0.0001f)
+		dx = 0.0001f;
+	if (abs(dy) < 0.0001f)
+		dy = 0.0001f;
+
 	int cur_tile_x = startx;
 	int cur_tile_y = starty;
 
-	float cur_x = (float)start_x_real;
-	float cur_y = (float)start_y_real;
+	// Calculate coefficient and bias for tx, ty calculation
+	// The calculation is tx = (x - x0) / dx, ty = (y - y0) / dy
+	// Which is derived from x = x0 + tdx, y = y0 + ydx
+	// And can then be simplified to a multiply add
+	// tx = x * (1/dx) + (- x0 / dx)
+	// or tx = x * dx_coeff + dx_bias
+	const float dx_coeff = 1.0f / dx;
+	const float dy_coeff = 1.0f / dy;
+
+	const float dx_bias = -(startx / dx);
+	const float dy_bias = -(starty / dy);
+
+	int dx_step = (dx > 0 ? 1 : -1);
+	int dy_step = (dy > 0 ? 1 : -1);
 
 	while (cur_tile_x != endx || cur_tile_y != endy)
 	{
-		int cur_tile_x_init = cur_tile_x;
-		int cur_tile_y_init = cur_tile_y;
+		int next_x = cur_tile_x + dx_step;
+		int next_y = cur_tile_y + dy_step;
 
-		while (cur_tile_x == cur_tile_x_init && cur_tile_y == cur_tile_y_init)
-		{
-			const float step = 0.1f;
+		// Calculate next tx and ty value
+		float tx = next_x * dx_coeff + dx_bias;
+		float ty = next_y * dy_coeff + dy_bias;
 
-			cur_x += dx * step;
-			cur_y += dy * step;
-
-			cur_tile_x = cur_x / (float)TILE_WIDTH;
-			cur_tile_y = cur_y / (float)TILE_WIDTH;
-		}
+		if (tx < ty)
+			cur_tile_x = next_x;
+		else
+			cur_tile_y = next_y;
 
 		// If tile blocked, return true (hit)
 		if (level[cur_tile_y * level_width + cur_tile_x] == '#')
 		{
 			return true;
 		}
-
-		// New tile
-		//setTile(pixels, cur_tile_x, cur_tile_y, 0x00FF00);
 	}
 
+	// Made it to (endx, endy), return false (hit)
 	return false;
 }
