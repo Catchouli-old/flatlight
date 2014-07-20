@@ -53,6 +53,8 @@
       <SDLCheck>true</SDLCheck>
       <AdditionalIncludeDirectories>include;dep/include</AdditionalIncludeDirectories>
       <AdditionalOptions>-D _CRT_SECURE_NO_WARNINGS %(AdditionalOptions)</AdditionalOptions>
+      <CompileAsWinRT>
+      </CompileAsWinRT>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -80,6 +82,8 @@
       <SDLCheck>true</SDLCheck>
       <AdditionalIncludeDirectories>include;dep/include</AdditionalIncludeDirectories>
       <AdditionalOptions>-D _CRT_SECURE_NO_WARNINGS %(AdditionalOptions)</AdditionalOptions>
+      <CompileAsWinRT>
+      </CompileAsWinRT>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>

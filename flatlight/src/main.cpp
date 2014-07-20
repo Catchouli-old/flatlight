@@ -2,9 +2,24 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <glm/glm.hpp>
 
 #include <SDL2/SDL.h>
 #undef main
+
+struct colour_t
+{
+	uint32_t r : 8;
+	uint32_t g : 8;
+	uint32_t b : 8;
+	uint32_t a : 8;
+};
+
+struct light_t
+{
+	glm::vec3 colour;
+	glm::vec2 pos;
+};
 
 void pause();
 void createWindow(int width, int height, SDL_Window** window, SDL_Renderer** renderer);
@@ -25,9 +40,6 @@ const int INITIAL_HEIGHT = 600;
 int width = INITIAL_WIDTH;
 int height = INITIAL_HEIGHT;
 
-int light_x = 32;
-int light_y = 24;
-
 // Colour buffer
 uint32_t* pixels;
 
@@ -36,10 +48,22 @@ int level_width;
 int level_height;
 char* level;
 
+// Default light settings
+light_t lights[] =
+{
+	light_t{ glm::vec3(1.0f, 0.0f, 0.0f), glm::ivec2(28, 9) },
+	light_t{ glm::vec3(0.0f, 1.0f, 0.0f), glm::ivec2(53, 10) },
+	light_t{ glm::vec3(0.0f, 0.0f, 1.0f), glm::ivec2(14, 34) },
+	light_t{ glm::vec3(1.0f, 1.0f, 1.0f), glm::ivec2(34, 31) }
+};
+
+const int LIGHT_COUNT = sizeof(lights) / sizeof(light_t);
+
 int main(int argc, char** argv)
 {
 	// State
 	bool running = true;
+	int cur_light = -1;
 
 	// Window references
 	SDL_Window* window;
@@ -97,8 +121,32 @@ int main(int argc, char** argv)
 				}
 				else if (e.button.button == SDL_BUTTON_RIGHT)
 				{
-					light_x = e.button.x / TILE_WIDTH;
-					light_y = e.button.y / TILE_HEIGHT;
+					int tile_x = e.button.x / TILE_WIDTH;
+					int tile_y = e.button.y / TILE_HEIGHT;
+
+					cur_light = -1;
+
+					for (int i = 0; i < LIGHT_COUNT; ++i)
+					{
+						if (tile_x == lights[i].pos.x && tile_y == lights[i].pos.y)
+							cur_light = i;
+					}
+				}
+				break;
+			case SDL_MOUSEMOTION:
+				if (cur_light != -1)
+				{
+					int tile_x = e.motion.x / TILE_WIDTH;
+					int tile_y = e.motion.y / TILE_HEIGHT;
+
+					lights[cur_light].pos = glm::ivec2(tile_x, tile_y);
+				}
+			case SDL_MOUSEBUTTONUP:
+				if (e.button.button == SDL_BUTTON_RIGHT)
+				{
+					printf("Light dropped: (%f, %f)\n", lights[cur_light].pos.x, lights[cur_light].pos.y);
+					
+					cur_light = -1;
 				}
 				break;
 			case SDL_QUIT:
@@ -123,47 +171,46 @@ int main(int argc, char** argv)
 					break;
 				default:
 					// Air
-					setTile(pixels, x, y, 0);
+					glm::vec3 tile_col;
 
 					// Check lighting
-					if (!raycast(light_x, light_y, x, y))
+					// For each light
+					for (int i = 0; i < LIGHT_COUNT; ++i)
 					{
-						float diffx = x - light_x;
-						float diffy = y - light_y;
+						const light_t& light = lights[i];
 
-						float dist = sqrt(diffx * diffx + diffy * diffy);
-
-						const float a = 0.1f;
-						const float b = 0.1f;
-
-						float att = 1.0f / (1.0f + a*dist + b*dist*dist);
-
-						float level = att;
-						unsigned char cLevel = (char)(level * 255.0f);
-
-						struct colour
+						if (!raycast(light.pos.x, light.pos.y, x, y))
 						{
-							uint32_t r :8;
-							uint32_t g :8;
-							uint32_t b :8;
-							uint32_t a :8;
-						};
+							float diffx = x - light.pos.x;
+							float diffy = y - light.pos.y;
 
-						colour col;
-						memset(&col, 0, sizeof(col));
-						col.r = cLevel;
+							float dist = sqrt(diffx * diffx + diffy * diffy);
 
-						setTile(pixels, x, y, *(uint32_t*)&col);
+							const float a = 0.1f;
+							const float b = 0.1f;
+
+							float att = 1.0f / (1.0f + a*dist + b*dist*dist);
+
+							tile_col += light.colour * att;
+						}
 					}
+
+					// Clamp and convert to colour
+					tile_col = glm::clamp(tile_col, 0.0f, 1.0f);
+
+					glm::vec3 tile_col_255 = tile_col * 255.0f;
+
+					colour_t final_tile_col{(uint8_t)tile_col_255.r,
+											(uint8_t)tile_col_255.g,
+											(uint8_t)tile_col_255.b,
+											1.0f };
+
+					setTile(pixels, x, y, *(uint32_t*)&final_tile_col);
+
 					break;
 				}
 			}
 		}
-
-		raycast(light_x, light_y, 15, 20);
-
-		// Render light
-		setTile(pixels, light_x, light_y, 0xFFFFFF);
 
 		// Update render texture from colour buffer
 		SDL_UpdateTexture(texture, nullptr, pixels, level_width * sizeof(uint32_t));
@@ -194,8 +241,6 @@ int main(int argc, char** argv)
 	SDL_DestroyWindow(window);
 	SDL_Quit();
 
-	pause();
-
 	return 0;
 }
 
@@ -211,7 +256,7 @@ void createWindow(int width, int height, SDL_Window** window, SDL_Renderer** ren
 	SDL_SetHint(SDL_HINT_RENDER_VSYNC, 0);
 
 	// Create window
-	*window = SDL_CreateWindow("flatlight",
+	*window = SDL_CreateWindow("flatlight - place tiles with left click and drag lights with right",
 							   SDL_WINDOWPOS_UNDEFINED,
 							   SDL_WINDOWPOS_UNDEFINED,
 							   width,
@@ -327,9 +372,16 @@ void setTile(uint32_t* pixels, int x, int y, int colour)
 // An implementation of John Amanatides (1987) - A fast voxel traversal algorithm for ray tracing
 bool raycast(int startx, int starty, int endx, int endy)
 {
+	// Hit if the start tile is obstructed
 	if (level[starty * level_width + startx] == '#')
 	{
 		return true;
+	}
+
+	// No hit if the start tile is the end tile
+	if (startx == endx && starty == endy)
+	{
+		return false;
 	}
 
 	float diffx = endx - startx;
