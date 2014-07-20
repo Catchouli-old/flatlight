@@ -415,7 +415,9 @@ bool raycast(int startx, int starty, int endx, int endy)
 	int dx_step = (dx > 0 ? 1 : -1);
 	int dy_step = (dy > 0 ? 1 : -1);
 
-	while (cur_tile_x != endx || cur_tile_y != endy)
+	float t = 0;
+
+	while (t < length)
 	{
 		int next_x = cur_tile_x + dx_step;
 		int next_y = cur_tile_y + dy_step;
@@ -425,9 +427,15 @@ bool raycast(int startx, int starty, int endx, int endy)
 		float ty = next_y * dy_coeff + dy_bias;
 
 		if (tx < ty)
+		{
 			cur_tile_x = next_x;
+			t = tx;
+		}
 		else
+		{
 			cur_tile_y = next_y;
+			t = ty;
+		}
 
 		// If tile blocked, return true (hit)
 		if (level[cur_tile_y * level_width + cur_tile_x] == '#')
