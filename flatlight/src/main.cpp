@@ -7,7 +7,7 @@
 #undef main
 
 void pause();
-void createWindow(int width, int height, SDL_Window** window, SDL_Renderer** renderer, SDL_Texture** texture);
+void createWindow(int width, int height, SDL_Window** window, SDL_Renderer** renderer);
 void loadLevel(const char* filename, char** level, int* level_width, int* level_height);
 void setTile(uint32_t* pixels, int x, int y, int colour);
 bool raycast(int startx, int starty, int endx, int endy);
@@ -57,10 +57,14 @@ int main(int argc, char** argv)
 	SDL_Init(SDL_INIT_VIDEO);
 
 	// Create window
-	createWindow(width, height, &window, &renderer, &texture);
+	createWindow(width, height, &window, &renderer);
+
+	// Create render texture
+	texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
+		SDL_TEXTUREACCESS_STATIC, level_width, level_height);
 
 	// Create colour buffer
-	pixels = new uint32_t[width * height];
+	pixels = new uint32_t[level_width * level_height];
 
 	// Main loop
 	while (running)
@@ -103,8 +107,8 @@ int main(int argc, char** argv)
 			}
 		}
 
-		// Clear screen
-		memset(pixels, 0, width * height * sizeof(uint32_t));
+		// Clear screen to 0 (black)
+		memset(pixels, 0, level_width * level_height * sizeof(uint32_t));
 
 		// Render
 		for (int y = 0; y < level_height; ++y)
@@ -162,11 +166,24 @@ int main(int argc, char** argv)
 		setTile(pixels, light_x, light_y, 0xFFFFFF);
 
 		// Update render texture from colour buffer
-		SDL_UpdateTexture(texture, nullptr, pixels, width * sizeof(uint32_t));
+		SDL_UpdateTexture(texture, nullptr, pixels, level_width * sizeof(uint32_t));
+
+		SDL_Rect src_rect;
+		SDL_Rect dest_rect;
+
+		src_rect.x = 0;
+		src_rect.y = 0;
+		src_rect.w = level_width;
+		src_rect.h = level_height;
+
+		dest_rect.x = 0;
+		dest_rect.y = 0;
+		dest_rect.w = width;
+		dest_rect.h = height;
 
 		// Render to window
 		SDL_RenderClear(renderer);
-		SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+		SDL_RenderCopy(renderer, texture, &src_rect, &dest_rect);
 		SDL_RenderPresent(renderer);
 	}
 
@@ -189,8 +206,10 @@ void pause()
 	getchar();
 }
 
-void createWindow(int width, int height, SDL_Window** window, SDL_Renderer** renderer, SDL_Texture** texture)
+void createWindow(int width, int height, SDL_Window** window, SDL_Renderer** renderer)
 {
+	SDL_SetHint(SDL_HINT_RENDER_VSYNC, 0);
+
 	// Create window
 	*window = SDL_CreateWindow("flatlight",
 							   SDL_WINDOWPOS_UNDEFINED,
@@ -211,10 +230,6 @@ void createWindow(int width, int height, SDL_Window** window, SDL_Renderer** ren
 
 	// Create renderer
 	*renderer = SDL_CreateRenderer(*window, -1, 0);
-
-	// Create render texture
-	*texture = SDL_CreateTexture(*renderer, SDL_PIXELFORMAT_ABGR8888,
-		SDL_TEXTUREACCESS_STATIC, width, height);
 }
 
 void loadLevel(const char* filename, char** level, int* level_width, int* level_height)
@@ -305,13 +320,7 @@ void loadLevel(const char* filename, char** level, int* level_width, int* level_
 
 void setTile(uint32_t* pixels, int x, int y, int colour)
 {
-	for (int cy = y * TILE_HEIGHT; cy < y * TILE_HEIGHT + TILE_HEIGHT; ++cy)
-	{
-		for (int cx = x * TILE_WIDTH; cx < x * TILE_WIDTH + TILE_WIDTH; ++cx)
-		{
-			pixels[cy * width + cx] = colour;
-		}
-	}
+	pixels[y * level_width + x] = colour;
 }
 
 // A fast raycast that skips to the next tile along the ray in a grid
